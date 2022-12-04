@@ -58,9 +58,8 @@ const SwapComponent = () => {
 
   const notifyError = msg => toast.error(msg, { duration: 6000 })
   const notifySuccess = () => toast.success('Transaction completed.')
-  const address = ''
 
-  // Functions for functionality
+  const { address } = useAccount()
 
   useEffect(() => {
     // Handling the text of the submit button
@@ -121,9 +120,8 @@ const SwapComponent = () => {
       <button
         className={getSwapBtnClassName()}
         onClick={() => {
-          if (swapBtnText === INCREASE_ALLOWANCE)
-            console.log('increaseAllowance')
-          else if (swapBtnText === SWAP) console.log('Swap')
+          if (swapBtnText === INCREASE_ALLOWANCE) handleIncreaseAllowance()
+          else if (swapBtnText === SWAP) handleSwap()
         }}
       >
         {swapBtnText}
@@ -135,7 +133,29 @@ const SwapComponent = () => {
     </div>
   )
 
-  // Front end functionality
+  async function handleSwap() {
+    if (srcToken === ETH && destToken !== ETH) {
+      performSwap()
+    } else {
+      // Check whether there is allowance when the swap deals with tokenToEth/tokenToToken
+      setTxPending(true)
+      const result = await hasValidAllowance(address, srcToken, inputValue)
+      setTxPending(false)
+
+      if (result) performSwap()
+      else handleInsufficientAllowance()
+    }
+  }
+
+  async function handleIncreaseAllowance() {
+    // Increase the allowance
+    setTxPending(true)
+    await increaseAllowance(srcToken, inputValue)
+    setTxPending(false)
+
+    // Set the swapbtn to "Swap" again
+    setSwapBtnText(SWAP)
+  }
 
   function handleReverseExchange(e) {
     // Setting the isReversed value to prevent the input/output values
@@ -204,6 +224,24 @@ const SwapComponent = () => {
     } catch (error) {
       setInputValue('0')
     }
+  }
+
+  async function performSwap() {
+    setTxPending(true)
+
+    let receipt
+
+    if (srcToken === ETH && destToken !== ETH)
+      receipt = await swapEthToToken(destToken, inputValue)
+    else if (srcToken !== ETH && destToken === ETH)
+      receipt = await swapTokenToEth(srcToken, inputValue)
+    else receipt = await swapTokenToToken(srcToken, destToken, inputValue)
+
+    setTxPending(false)
+
+    if (receipt && !receipt.hasOwnProperty('transactionHash'))
+      notifyError(receipt)
+    else notifySuccess()
   }
 
   function handleInsufficientAllowance() {
